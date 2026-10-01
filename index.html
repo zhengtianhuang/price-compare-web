@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price Compare</title>
+<style>
+  :root { --accent: #2f7a5c; --bg: #f6f3ec; --ink: #2b2b2b; --line: #e2ddd0; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, system-ui, sans-serif;
+    padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: #777; font-size: 0.9rem; margin: 0 0 24px; }
+  .card {
+    background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; margin-bottom: 20px;
+  }
+  .search-row { display: flex; gap: 8px; }
+  input, select, textarea {
+    font-size: 0.95rem; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 8px; font-family: inherit; width: 100%; background: #fff; color: var(--ink);
+  }
+  .search-row input { flex: 1; }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { color: #888; font-weight: 600; font-size: 0.74rem; text-transform: uppercase; }
+  .tag { display: inline-block; font-size: 0.66rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+  .tag.verified { background: #e3f0ea; color: var(--accent); }
+  .tag.unverified { background: #f0ece0; color: #a07d3f; }
+  .ppu { font-weight: 600; }
+  .stars { color: #c9972f; letter-spacing: 1px; }
+  .stars.empty-rating { color: #ccc; }
+  .empty { color: #999; text-align: center; padding: 20px 0; font-size: 0.9rem; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  label { font-size: 0.78rem; color: #777; display: block; margin-bottom: 4px; }
+  .field { margin-bottom: 2px; }
+  .msg { font-size: 0.85rem; margin-top: 10px; padding: 8px 10px; border-radius: 8px; display: none; }
+  .msg.ok { background: #e3f0ea; color: var(--accent); display: block; }
+  .msg.err { background: #fbe9e7; color: #b23b2e; display: block; }
+  .honeypot { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Price Compare</h1>
+  <p class="sub">A crowdsourced log of real prices people actually paid — the more people use it, the more accurate it gets.</p>
+
+  <div class="card">
+    <div class="search-row">
+      <input id="searchInput" type="text" placeholder="Search an item, e.g. milk, eggs">
+      <button id="searchBtn">Search</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <table id="resultsTable">
+      <thead>
+        <tr><th>Item</th><th>Store</th><th>Price</th><th>Unit price</th><th>Quality</th><th>Source</th></tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty" style="display:none;">No entries yet — be the first to add one.</div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:1.05rem;margin-top:0;">Add a price</h2>
+    <form id="submitForm">
+      <div class="honeypot"><label>Website</label><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Item *</label>
+          <input type="text" id="f_item" required maxlength="80">
+        </div>
+        <div class="field">
+          <label>Store</label>
+          <input type="text" id="f_store" maxlength="80">
+        </div>
+        <div class="field">
+          <label>Location (city/suburb)</label>
+          <input type="text" id="f_location" maxlength="80">
+        </div>
+        <div class="field">
+          <label>Price (AUD) *</label>
+          <input type="number" id="f_price" required min="0.01" max="2000" step="0.01">
+        </div>
+        <div class="field">
+          <label>Quantity</label>
+          <input type="number" id="f_quantity" min="0.01" max="10000" step="0.01">
+        </div>
+        <div class="field">
+          <label>Unit (kg / each / pack…)</label>
+          <input type="text" id="f_unit" maxlength="20">
+        </div>
+        <div class="field">
+          <label>Quality rating (1-5)</label>
+          <input type="number" id="f_quality" min="1" max="5" step="1">
+        </div>
+        <div class="field full">
+          <label>Notes</label>
+          <input type="text" id="f_note" maxlength="300">
+        </div>
+        <div class="field full">
+          <label>Receipt photo (optional — entries without one show as Unverified)</label>
+          <input type="file" id="f_receipt" accept="image/*">
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button type="submit" id="submitBtn">Submit</button>
+      </div>
+      <div id="formMsg" class="msg"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://tomasa-vestigial-compositely.ngrok-free.dev';
+const SKIP_WARNING_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
+
+function fmtMoney(n) { return n == null ? '—' : '$' + Number(n).toFixed(2); }
+
+function fmtStars(rating) {
+  if (!rating) return '<span class="stars empty-rating">—</span>';
+  const r = Math.max(1, Math.min(5, Math.round(rating)));
+  return `<span class="stars">${'★'.repeat(r)}${'☆'.repeat(5 - r)}</span>`;
+}
+
+function renderRows(rows) {
+  const body = document.getElementById('resultsBody');
+  const empty = document.getElementById('emptyState');
+  body.innerHTML = '';
+  if (!rows.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    const isVerified = r.source === 'javen_verified' || !!r.has_receipt;
+    const tagClass = isVerified ? 'verified' : 'unverified';
+    const tagLabel = isVerified ? 'Verified' : 'Unverified';
+    const noteAttr = r.quality_note ? ` title="${escapeHtml(r.quality_note)}"` : '';
+    tr.innerHTML = `
+      <td>${escapeHtml(r.item)}</td>
+      <td>${escapeHtml(r.store || '—')}</td>
+      <td>${fmtMoney(r.price_aud)}${r.unit ? ' / ' + escapeHtml(r.unit) : ''}</td>
+      <td class="ppu">${fmtMoney(r.price_per_unit_aud)}</td>
+      <td${noteAttr}>${fmtStars(r.quality_rating)}</td>
+      <td><span class="tag ${tagClass}">${tagLabel}</span></td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+async function search() {
+  const q = document.getElementById('searchInput').value.trim();
+  const url = new URL(`${API_BASE}/price-compare/api/items`);
+  if (q) url.searchParams.set('q', q);
+  try {
+    const r = await fetch(url, { headers: SKIP_WARNING_HEADERS });
+    const rows = await r.json();
+    renderRows(rows);
+  } catch (e) {
+    renderRows([]);
+  }
+}
+
+document.getElementById('searchBtn').addEventListener('click', search);
+document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+
+document.getElementById('submitForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const msg = document.getElementById('formMsg');
+  btn.disabled = true;
+  msg.className = 'msg';
+
+  const payload = new FormData();
+  payload.set('website', document.querySelector('input[name=website]').value); // honeypot
+  payload.set('item', document.getElementById('f_item').value.trim());
+  payload.set('store', document.getElementById('f_store').value.trim());
+  payload.set('location', document.getElementById('f_location').value.trim());
+  payload.set('price_aud', document.getElementById('f_price').value);
+  payload.set('quantity', document.getElementById('f_quantity').value || '');
+  payload.set('unit', document.getElementById('f_unit').value.trim());
+  payload.set('quality_rating', document.getElementById('f_quality').value || '');
+  payload.set('quality_note', document.getElementById('f_note').value.trim());
+  const receiptFile = document.getElementById('f_receipt').files[0];
+  if (receiptFile) payload.set('receipt', receiptFile);
+
+  try {
+    // No Content-Type header here on purpose — the browser sets the
+    // multipart boundary itself when the body is a FormData.
+    const r = await fetch(`${API_BASE}/price-compare/api/submit`, {
+      method: 'POST',
+      headers: { ...SKIP_WARNING_HEADERS },
+      body: payload,
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      msg.textContent = data.error || 'Something went wrong — please try again.';
+      msg.className = 'msg err';
+    } else {
+      msg.textContent = 'Submitted — thanks for contributing!';
+      msg.className = 'msg ok';
+      document.getElementById('submitForm').reset();
+      search();
+    }
+  } catch (e) {
+    msg.textContent = 'Connection error — please try again.';
+    msg.className = 'msg err';
+  }
+  btn.disabled = false;
+});
+
+search();
+</script>
+</body>
+</html>
