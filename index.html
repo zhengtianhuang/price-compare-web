@@ -140,8 +140,8 @@ const TICKER_SECONDS_PER_ROW = 2.6;
 let lastTickerKey = '';
 
 // Ticker (Recently added) is deliberately bare — item/store/price only.
-// Quality + verified-source only show up where you're actually comparing
-// prices: the search results below and the post-submit comparison card.
+// Quality stars only show up where you're actually comparing prices (search
+// results below). Source (verified/community) isn't shown anywhere in the UI.
 function tickerRowHtml(r) {
   return `
     <div class="ticker-row">
@@ -153,16 +153,12 @@ function tickerRowHtml(r) {
 }
 
 function searchRowHtml(r) {
-  const isVerified = r.source === 'javen_verified';
-  const tagClass = isVerified ? 'verified' : 'community';
-  const tagLabel = isVerified ? 'Verified' : 'Community';
   const noteAttr = r.quality_note ? ` title="${escapeHtml(r.quality_note)}"` : '';
   return `
     <div class="search-row-item"${noteAttr}>
       <span class="t-item">${escapeHtml(r.item)}</span>
       <span class="t-store">${escapeHtml(r.store || '—')}</span>
       ${fmtStars(r.quality_rating)}
-      <span class="tag ${tagClass}">${tagLabel}</span>
       <span class="t-price">${fmtMoney(r.price_aud)}${r.unit ? ' / ' + escapeHtml(r.unit) : ''}</span>
     </div>
   `;
