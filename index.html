@@ -19,24 +19,37 @@
     background: #fff; border: 1px solid var(--line); border-radius: 14px;
     padding: 18px; margin-bottom: 20px;
   }
-  .search-row { display: flex; gap: 8px; }
   input, select, textarea {
     font-size: 0.95rem; padding: 10px 12px; border: 1px solid var(--line);
     border-radius: 8px; font-family: inherit; width: 100%; background: #fff; color: var(--ink);
   }
-  .search-row input { flex: 1; }
   button {
     background: var(--accent); color: #fff; border: none; border-radius: 8px;
     padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
   }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   button.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
-  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
-  th { color: #888; font-weight: 600; font-size: 0.74rem; text-transform: uppercase; }
+  .ticker { position: relative; height: 260px; overflow: hidden; }
+  .ticker::before, .ticker::after {
+    content: ''; position: absolute; left: 0; right: 0; height: 24px; z-index: 1; pointer-events: none;
+  }
+  .ticker::before { top: 0; background: linear-gradient(#fff, rgba(255,255,255,0)); }
+  .ticker::after { bottom: 0; background: linear-gradient(rgba(255,255,255,0), #fff); }
+  .ticker-track { position: absolute; top: 0; left: 0; right: 0; }
+  .ticker-row {
+    display: flex; align-items: baseline; gap: 10px; padding: 10px 2px;
+    border-bottom: 1px solid var(--line); font-size: 0.88rem;
+  }
+  .ticker-row .t-item { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ticker-row .t-store { color: #888; font-size: 0.78rem; }
+  .ticker-row .t-price { font-weight: 600; color: var(--accent); white-space: nowrap; }
+  @keyframes tickerScroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
   .tag { display: inline-block; font-size: 0.66rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
   .tag.verified { background: #e3f0ea; color: var(--accent); }
-  .tag.unverified { background: #f0ece0; color: #a07d3f; }
+  .tag.community { background: #f0ece0; color: #a07d3f; }
+  .photo-row { display: flex; align-items: center; gap: 12px; }
+  .photo-row input[type=file] { flex: 1; }
+  .hint { font-size: 0.78rem; color: #999; margin: 4px 0 0; }
   .ppu { font-weight: 600; }
   .stars { color: #c9972f; letter-spacing: 1px; }
   .stars.empty-rating { color: #ccc; }
@@ -48,6 +61,13 @@
   .msg { font-size: 0.85rem; margin-top: 10px; padding: 8px 10px; border-radius: 8px; display: none; }
   .msg.ok { background: #e3f0ea; color: var(--accent); display: block; }
   .msg.err { background: #fbe9e7; color: #b23b2e; display: block; }
+  .comparison {
+    margin-top: 12px; padding: 14px; border-radius: 10px; background: #f6f3ec;
+    border: 1px solid var(--line); font-size: 0.88rem; line-height: 1.5;
+  }
+  .comparison .big { font-size: 1.3rem; font-weight: 700; }
+  .comparison .good { color: var(--accent); }
+  .comparison .bad { color: #b23b2e; }
   .honeypot { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; }
 </style>
 </head>
@@ -57,19 +77,10 @@
   <p class="sub">A crowdsourced log of real prices people actually paid — the more people use it, the more accurate it gets.</p>
 
   <div class="card">
-    <div class="search-row">
-      <input id="searchInput" type="text" placeholder="Search an item, e.g. milk, eggs">
-      <button id="searchBtn">Search</button>
+    <h2 style="font-size:1.05rem;margin-top:0;">Recently added</h2>
+    <div class="ticker" id="ticker">
+      <div class="ticker-track" id="tickerTrack"></div>
     </div>
-  </div>
-
-  <div class="card">
-    <table id="resultsTable">
-      <thead>
-        <tr><th>Item</th><th>Store</th><th>Price</th><th>Unit price</th><th>Quality</th><th>Source</th></tr>
-      </thead>
-      <tbody id="resultsBody"></tbody>
-    </table>
     <div id="emptyState" class="empty" style="display:none;">No entries yet — be the first to add one.</div>
   </div>
 
@@ -77,48 +88,18 @@
     <h2 style="font-size:1.05rem;margin-top:0;">Add a price</h2>
     <form id="submitForm">
       <div class="honeypot"><label>Website</label><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
-      <div class="form-grid">
-        <div class="field full">
-          <label>Item *</label>
-          <input type="text" id="f_item" required maxlength="80">
+      <div class="field full">
+        <label>Photo of the receipt or price tag *</label>
+        <div class="photo-row">
+          <input type="file" id="f_photo" accept="image/*" required>
         </div>
-        <div class="field">
-          <label>Store</label>
-          <input type="text" id="f_store" maxlength="80">
-        </div>
-        <div class="field">
-          <label>Location (city/suburb)</label>
-          <input type="text" id="f_location" maxlength="80">
-        </div>
-        <div class="field">
-          <label>Price (AUD) *</label>
-          <input type="number" id="f_price" required min="0.01" max="2000" step="0.01">
-        </div>
-        <div class="field">
-          <label>Quantity</label>
-          <input type="number" id="f_quantity" min="0.01" max="10000" step="0.01">
-        </div>
-        <div class="field">
-          <label>Unit (kg / each / pack…)</label>
-          <input type="text" id="f_unit" maxlength="20">
-        </div>
-        <div class="field">
-          <label>Quality rating (1-5)</label>
-          <input type="number" id="f_quality" min="1" max="5" step="1">
-        </div>
-        <div class="field full">
-          <label>Notes</label>
-          <input type="text" id="f_note" maxlength="300">
-        </div>
-        <div class="field full">
-          <label>Receipt photo (optional — entries without one show as Unverified)</label>
-          <input type="file" id="f_receipt" accept="image/*">
-        </div>
+        <p class="hint">Just the photo — item, store, price, and quality are all read automatically. The photo itself is never kept, it's deleted right after.</p>
       </div>
       <div style="margin-top:14px;">
         <button type="submit" id="submitBtn">Submit</button>
       </div>
       <div id="formMsg" class="msg"></div>
+      <div id="comparisonResult" class="comparison" style="display:none;"></div>
     </form>
   </div>
 </div>
@@ -135,28 +116,58 @@ function fmtStars(rating) {
   return `<span class="stars">${'★'.repeat(r)}${'☆'.repeat(5 - r)}</span>`;
 }
 
-function renderRows(rows) {
-  const body = document.getElementById('resultsBody');
+const TICKER_ROW_COUNT = 8;
+const TICKER_SECONDS_PER_ROW = 2.6;
+let lastTickerKey = '';
+
+function rowHtml(r) {
+  const isVerified = r.source === 'javen_verified';
+  const tagClass = isVerified ? 'verified' : 'community';
+  const tagLabel = isVerified ? 'Verified' : 'Community';
+  const noteAttr = r.quality_note ? ` title="${escapeHtml(r.quality_note)}"` : '';
+  return `
+    <div class="ticker-row"${noteAttr}>
+      <span class="t-item">${escapeHtml(r.item)}</span>
+      <span class="t-store">${escapeHtml(r.store || '—')}</span>
+      ${fmtStars(r.quality_rating)}
+      <span class="tag ${tagClass}">${tagLabel}</span>
+      <span class="t-price">${fmtMoney(r.price_aud)}${r.unit ? ' / ' + escapeHtml(r.unit) : ''}</span>
+    </div>
+  `;
+}
+
+function renderTicker(rows) {
+  const track = document.getElementById('tickerTrack');
   const empty = document.getElementById('emptyState');
-  body.innerHTML = '';
-  if (!rows.length) { empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  for (const r of rows) {
-    const tr = document.createElement('tr');
-    const isVerified = r.source === 'javen_verified' || !!r.has_receipt;
-    const tagClass = isVerified ? 'verified' : 'unverified';
-    const tagLabel = isVerified ? 'Verified' : 'Unverified';
-    const noteAttr = r.quality_note ? ` title="${escapeHtml(r.quality_note)}"` : '';
-    tr.innerHTML = `
-      <td>${escapeHtml(r.item)}</td>
-      <td>${escapeHtml(r.store || '—')}</td>
-      <td>${fmtMoney(r.price_aud)}${r.unit ? ' / ' + escapeHtml(r.unit) : ''}</td>
-      <td class="ppu">${fmtMoney(r.price_per_unit_aud)}</td>
-      <td${noteAttr}>${fmtStars(r.quality_rating)}</td>
-      <td><span class="tag ${tagClass}">${tagLabel}</span></td>
-    `;
-    body.appendChild(tr);
+  const ticker = document.getElementById('ticker');
+
+  if (!rows.length) {
+    track.innerHTML = '';
+    track.style.animation = 'none';
+    ticker.style.display = 'none';
+    empty.style.display = 'block';
+    return;
   }
+  empty.style.display = 'none';
+  ticker.style.display = 'block';
+
+  // Dedup check so we don't restart the animation (visible jump) on every
+  // poll when nothing new has actually come in.
+  const key = rows.map(r => r.id).join(',');
+  if (key === lastTickerKey) return;
+  lastTickerKey = key;
+
+  if (rows.length <= 4) {
+    // Too few rows for a smooth loop — just render them statically.
+    track.style.animation = 'none';
+    track.innerHTML = rows.map(rowHtml).join('');
+    return;
+  }
+
+  // Duplicate the list once so translateY(-50%) loops seamlessly.
+  const html = rows.map(rowHtml).join('');
+  track.innerHTML = html + html;
+  track.style.animation = `tickerScroll ${rows.length * TICKER_SECONDS_PER_ROW}s linear infinite`;
 }
 
 function escapeHtml(s) {
@@ -165,41 +176,41 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-async function search() {
-  const q = document.getElementById('searchInput').value.trim();
+async function loadRecent() {
   const url = new URL(`${API_BASE}/price-compare/api/items`);
-  if (q) url.searchParams.set('q', q);
   try {
     const r = await fetch(url, { headers: SKIP_WARNING_HEADERS });
     const rows = await r.json();
-    renderRows(rows);
+    renderTicker(rows.slice(0, TICKER_ROW_COUNT));
   } catch (e) {
-    renderRows([]);
+    // leave whatever's currently shown rather than wiping it on a blip
   }
 }
 
-document.getElementById('searchBtn').addEventListener('click', search);
-document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+setInterval(loadRecent, 20000);
 
 document.getElementById('submitForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('submitBtn');
   const msg = document.getElementById('formMsg');
+
+  const photoFile = document.getElementById('f_photo').files[0];
+  if (!photoFile) {
+    msg.textContent = 'Please choose a photo first.';
+    msg.className = 'msg err';
+    return;
+  }
+
   btn.disabled = true;
+  btn.textContent = 'Reading photo…';
   msg.className = 'msg';
 
   const payload = new FormData();
   payload.set('website', document.querySelector('input[name=website]').value); // honeypot
-  payload.set('item', document.getElementById('f_item').value.trim());
-  payload.set('store', document.getElementById('f_store').value.trim());
-  payload.set('location', document.getElementById('f_location').value.trim());
-  payload.set('price_aud', document.getElementById('f_price').value);
-  payload.set('quantity', document.getElementById('f_quantity').value || '');
-  payload.set('unit', document.getElementById('f_unit').value.trim());
-  payload.set('quality_rating', document.getElementById('f_quality').value || '');
-  payload.set('quality_note', document.getElementById('f_note').value.trim());
-  const receiptFile = document.getElementById('f_receipt').files[0];
-  if (receiptFile) payload.set('receipt', receiptFile);
+  payload.set('photo', photoFile);
+
+  const cmp = document.getElementById('comparisonResult');
+  cmp.style.display = 'none';
 
   try {
     // No Content-Type header here on purpose — the browser sets the
@@ -214,19 +225,40 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
       msg.textContent = data.error || 'Something went wrong — please try again.';
       msg.className = 'msg err';
     } else {
-      msg.textContent = 'Submitted — thanks for contributing!';
+      msg.textContent = `Read from photo: ${data.item}${data.store ? ' at ' + data.store : ''} — $${Number(data.price_aud).toFixed(2)}. Thanks for contributing!`;
       msg.className = 'msg ok';
+      renderComparison(data);
       document.getElementById('submitForm').reset();
-      search();
+      loadRecent();
     }
   } catch (e) {
     msg.textContent = 'Connection error — please try again.';
     msg.className = 'msg err';
   }
   btn.disabled = false;
+  btn.textContent = 'Submit';
 });
 
-search();
+function renderComparison(data) {
+  const cmp = document.getElementById('comparisonResult');
+  const c = data.comparison;
+  if (!c || c.count === 0) {
+    cmp.style.display = 'block';
+    cmp.innerHTML = `<span class="big">${fmtMoney(data.price_aud)}</span><br>First price recorded for "${escapeHtml(data.item)}" — nothing to compare against yet.`;
+    return;
+  }
+  const verdictClass = c.cheaper_than_avg ? 'good' : 'bad';
+  const verdictWord = c.cheaper_than_avg ? 'cheaper' : 'pricier';
+  cmp.style.display = 'block';
+  cmp.innerHTML = `
+    <span class="big">${fmtMoney(data.price_aud)}</span>
+    <span class="${verdictClass}">— ${verdictWord} than average</span><br>
+    Compared against ${c.count} other ${c.count === 1 ? 'entry' : 'entries'} for "${escapeHtml(data.item)}" `
+    + `(avg ${c.metric} ${fmtMoney(c.avg)}, range ${fmtMoney(c.min)}–${fmtMoney(c.max)}).
+  `;
+}
+
+loadRecent();
 </script>
 </body>
 </html>
