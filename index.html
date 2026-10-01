@@ -47,6 +47,16 @@
   .tag { display: inline-block; font-size: 0.66rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
   .tag.verified { background: #e3f0ea; color: var(--accent); }
   .tag.community { background: #f0ece0; color: #a07d3f; }
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { flex: 1; }
+  .search-results { margin-top: 14px; }
+  .search-row-item {
+    display: flex; align-items: baseline; gap: 10px; padding: 10px 2px;
+    border-bottom: 1px solid var(--line); font-size: 0.88rem;
+  }
+  .search-row-item .t-item { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .search-row-item .t-store { color: #888; font-size: 0.78rem; }
+  .search-row-item .t-price { font-weight: 600; color: var(--accent); white-space: nowrap; }
   .photo-row { display: flex; align-items: center; gap: 12px; }
   .photo-row input[type=file] { flex: 1; }
   .hint { font-size: 0.78rem; color: #999; margin: 4px 0 0; }
@@ -85,6 +95,15 @@
   </div>
 
   <div class="card">
+    <h2 style="font-size:1.05rem;margin-top:0;">Search</h2>
+    <div class="search-row">
+      <input id="searchInput" type="text" placeholder="Search an item, e.g. milk, eggs">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+
+  <div class="card">
     <h2 style="font-size:1.05rem;margin-top:0;">Start comparing</h2>
     <form id="submitForm">
       <div class="honeypot"><label>Website</label><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
@@ -120,13 +139,26 @@ const TICKER_ROW_COUNT = 8;
 const TICKER_SECONDS_PER_ROW = 2.6;
 let lastTickerKey = '';
 
-function rowHtml(r) {
+// Ticker (Recently added) is deliberately bare — item/store/price only.
+// Quality + verified-source only show up where you're actually comparing
+// prices: the search results below and the post-submit comparison card.
+function tickerRowHtml(r) {
+  return `
+    <div class="ticker-row">
+      <span class="t-item">${escapeHtml(r.item)}</span>
+      <span class="t-store">${escapeHtml(r.store || '—')}</span>
+      <span class="t-price">${fmtMoney(r.price_aud)}${r.unit ? ' / ' + escapeHtml(r.unit) : ''}</span>
+    </div>
+  `;
+}
+
+function searchRowHtml(r) {
   const isVerified = r.source === 'javen_verified';
   const tagClass = isVerified ? 'verified' : 'community';
   const tagLabel = isVerified ? 'Verified' : 'Community';
   const noteAttr = r.quality_note ? ` title="${escapeHtml(r.quality_note)}"` : '';
   return `
-    <div class="ticker-row"${noteAttr}>
+    <div class="search-row-item"${noteAttr}>
       <span class="t-item">${escapeHtml(r.item)}</span>
       <span class="t-store">${escapeHtml(r.store || '—')}</span>
       ${fmtStars(r.quality_rating)}
@@ -160,12 +192,12 @@ function renderTicker(rows) {
   if (rows.length <= 4) {
     // Too few rows for a smooth loop — just render them statically.
     track.style.animation = 'none';
-    track.innerHTML = rows.map(rowHtml).join('');
+    track.innerHTML = rows.map(tickerRowHtml).join('');
     return;
   }
 
   // Duplicate the list once so translateY(-50%) loops seamlessly.
-  const html = rows.map(rowHtml).join('');
+  const html = rows.map(tickerRowHtml).join('');
   track.innerHTML = html + html;
   track.style.animation = `tickerScroll ${rows.length * TICKER_SECONDS_PER_ROW}s linear infinite`;
 }
@@ -188,6 +220,27 @@ async function loadRecent() {
 }
 
 setInterval(loadRecent, 20000);
+
+async function runSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  const results = document.getElementById('searchResults');
+  if (!q) { results.innerHTML = ''; return; }
+  results.innerHTML = '<p class="empty">Searching…</p>';
+  try {
+    const url = new URL(`${API_BASE}/price-compare/api/items`);
+    url.searchParams.set('q', q);
+    const r = await fetch(url, { headers: SKIP_WARNING_HEADERS });
+    const rows = await r.json();
+    results.innerHTML = rows.length
+      ? rows.map(searchRowHtml).join('')
+      : '<p class="empty">No matches for that item yet.</p>';
+  } catch (e) {
+    results.innerHTML = '<p class="empty">Search failed — try again.</p>';
+  }
+}
+
+document.getElementById('searchBtn').addEventListener('click', runSearch);
+document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
 
 document.getElementById('submitForm').addEventListener('submit', async (e) => {
   e.preventDefault();
