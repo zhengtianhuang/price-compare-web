@@ -118,6 +118,14 @@
         <button type="submit" id="submitBtn">Submit</button>
       </div>
       <div id="formMsg" class="msg"></div>
+      <div id="storePrompt" class="field full" style="display:none; margin-top:10px;">
+        <label>Which store was this from? (the photo didn't show one)</label>
+        <div class="photo-row">
+          <input type="text" id="f_store" placeholder="e.g. Woolworths, Coles, a local market…">
+          <button type="button" id="storeAddBtn">Add</button>
+          <button type="button" id="storeSkipBtn" class="secondary">Skip</button>
+        </div>
+      </div>
       <div id="comparisonResult" class="comparison" style="display:none;"></div>
     </form>
   </div>
@@ -273,6 +281,12 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
     if (!r.ok) {
       msg.textContent = data.error || 'Something went wrong — please try again.';
       msg.className = 'msg err';
+    } else if (data.needs_store) {
+      msg.textContent = `Read from photo: ${data.item} — $${Number(data.price_aud).toFixed(2)}.`;
+      msg.className = 'msg ok';
+      pendingDraftId = data.draft_id;
+      document.getElementById('storePrompt').style.display = 'block';
+      document.getElementById('f_store').focus();
     } else {
       msg.textContent = `Read from photo: ${data.item}${data.store ? ' at ' + data.store : ''} — $${Number(data.price_aud).toFixed(2)}. Thanks for contributing!`;
       msg.className = 'msg ok';
@@ -286,6 +300,50 @@ document.getElementById('submitForm').addEventListener('submit', async (e) => {
   }
   btn.disabled = false;
   btn.textContent = 'Submit';
+});
+
+let pendingDraftId = null;
+
+async function confirmStore(store) {
+  const msg = document.getElementById('formMsg');
+  const storePrompt = document.getElementById('storePrompt');
+  if (!pendingDraftId) return;
+
+  const payload = new FormData();
+  payload.set('draft_id', pendingDraftId);
+  payload.set('store', store);
+
+  try {
+    const r = await fetch(`${API_BASE}/price-compare/api/confirm-store`, {
+      method: 'POST',
+      headers: { ...SKIP_WARNING_HEADERS },
+      body: payload,
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      msg.textContent = data.error || 'Something went wrong — please try again.';
+      msg.className = 'msg err';
+      return;
+    }
+    msg.textContent = `Saved${data.store ? ' — ' + data.store : ''}. Thanks for contributing!`;
+    msg.className = 'msg ok';
+    renderComparison(data);
+    document.getElementById('submitForm').reset();
+    loadRecent();
+  } catch (e) {
+    msg.textContent = 'Connection error — please try again.';
+    msg.className = 'msg err';
+  }
+  pendingDraftId = null;
+  storePrompt.style.display = 'none';
+  document.getElementById('f_store').value = '';
+}
+
+document.getElementById('storeAddBtn').addEventListener('click', () => {
+  confirmStore(document.getElementById('f_store').value.trim());
+});
+document.getElementById('storeSkipBtn').addEventListener('click', () => {
+  confirmStore('');
 });
 
 function renderComparison(data) {
