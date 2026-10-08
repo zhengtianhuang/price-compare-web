@@ -147,6 +147,18 @@ const TICKER_ROW_COUNT = 8;
 const TICKER_SECONDS_PER_ROW = 2.6;
 let lastTickerKey = '';
 
+// "$3.99 · 600 g ($6.65/kg)" for weights/volumes, "$3.00 / bunch" for a single
+// countable unit, "$3.39 · 4 pack" otherwise. Unit price comes from the server.
+function fmtPrice(r) {
+  const unit = r.unit ? escapeHtml(r.unit) : '';
+  if (!unit) return fmtMoney(r.price_aud);
+  const per = { g: 'kg', kg: 'kg', ml: 'L', l: 'L' }[r.unit.toLowerCase()];
+  if (r.quantity === 1 && !per) return `${fmtMoney(r.price_aud)} / ${unit}`;
+  const qty = r.quantity ? `${+r.quantity} ${unit}` : unit;
+  const ppu = per && r.price_per_unit_aud != null ? ` <small>(${fmtMoney(r.price_per_unit_aud)}/${per})</small>` : '';
+  return `${fmtMoney(r.price_aud)} · ${qty}${ppu}`;
+}
+
 // Ticker (Recently added) is deliberately bare — item/store/price only.
 // Quality stars only show up where you're actually comparing prices (search
 // results below). Source (verified/community) isn't shown anywhere in the UI.
@@ -155,7 +167,7 @@ function tickerRowHtml(r) {
     <div class="ticker-row">
       <span class="t-item">${escapeHtml(r.item)}</span>
       <span class="t-store">${escapeHtml(r.store || '—')}</span>
-      <span class="t-price">${fmtMoney(r.price_aud)}${r.unit ? ' / ' + escapeHtml(r.unit) : ''}</span>
+      <span class="t-price">${fmtPrice(r)}</span>
     </div>
   `;
 }
@@ -167,7 +179,7 @@ function searchRowHtml(r) {
       <span class="t-item">${escapeHtml(r.item)}</span>
       <span class="t-store">${escapeHtml(r.store || '—')}</span>
       ${fmtStars(r.quality_rating)}
-      <span class="t-price">${fmtMoney(r.price_aud)}${r.unit ? ' / ' + escapeHtml(r.unit) : ''}</span>
+      <span class="t-price">${fmtPrice(r)}</span>
     </div>
   `;
 }
